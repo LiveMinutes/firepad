@@ -4507,7 +4507,7 @@ firepad.ParseHtml = (function () {
             }
             output.newlineIfNonEmpty(state);
             parseChildren(node, state, output);
-            output.output.newlineIfNonEmpty(state);
+            output.newlineIfNonEmpty(state);
             break;
           case 'center':
             state = state.withAlign('center');
@@ -4872,7 +4872,7 @@ firepad.Firepad = (function(global) {
       }
     }
 
-    function insertLine(line) {
+    function insertLine(line, noLineAfter) {
       // HACK: We should probably force a newline if there isn't one already.  But due to
       // the way this is used for inserting HTML, we end up inserting a "line" in the middle
       // of text, in which case we don't want to actually insert a newline.
@@ -4882,13 +4882,15 @@ firepad.Firepad = (function(global) {
       for(var i = 0; i < line.textPieces.length; i++) {
         insertTextOrString(line.textPieces[i]);
       }
-
-      insert('\n');
+      
+      if (!noLineAfter) {
+        insert('\n');
+      }
     }
 
     for(var i = 0; i < textPieces.length; i++) {
       if (textPieces[i] instanceof firepad.Line) {
-        insertLine(textPieces[i]);
+        insertLine(textPieces[i], (i == textPieces.length-1));
       } else {
         insertTextOrString(textPieces[i]);
       }
