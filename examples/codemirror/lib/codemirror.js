@@ -2285,8 +2285,13 @@ window.CodeMirror = (function() {
     // hint is null, leave the selection alone as much as possible
     var adjustPos = function(pos) {
       if (posLess(pos, change.from)) return pos;
-      if (!posLess(change.to, pos)) return end;
-
+      if (!posLess(change.to, pos)) {
+      	if ((!posLess(change.from, change.to))&&((change.text[0]).charCodeAt(0)!=57344)) 
+      		return pos;
+      	else
+      		return end;
+      }
+       
       var line = pos.line + change.text.length - (change.to.line - change.from.line) - 1, ch = pos.ch;
       if (pos.line == change.to.line) ch += end.ch - change.to.ch;
       return Pos(line, ch);

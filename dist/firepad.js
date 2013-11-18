@@ -2785,7 +2785,7 @@ firepad.RichTextCodeMirror = (function () {
     this.outstandingChanges_ = { };
     this.dirtyLines_ = [];
   }
-  utils.makeEventEmitter(RichTextCodeMirror, ['change', 'attributesChange']);
+  utils.makeEventEmitter(RichTextCodeMirror, ['change', 'attributesChange', 'newLine']);
 
   // A special character we insert at the beginning of lines so we can attach attributes to it to represent
   // "line attributes."  E000 is from the unicode "private use" range.
@@ -2815,7 +2815,7 @@ firepad.RichTextCodeMirror = (function () {
       this.currentAttributes_ = attrs;
     } else {
       var attributes = this.getCurrentAttributes_();
-      var newValue = (attributes[attribute] !== trueValue) ? trueValue : false;
+      var newValue = (attributes[attribute] !== trueValue) && trueValue;
       this.setAttribute(attribute, newValue);
     }
   };
@@ -4456,9 +4456,58 @@ firepad.ParseHtml = (function () {
           case 'h2':
           case 'h3':
           case 'p':
+            if(node.childNodes.length && node.childNodes[0].nodeValue) {
+              var value = node.childNodes[0].nodeValue.replace(/&nbsp;/g,' '),
+                  count = value.match(/^(\s| )+/g);
+              count = count && count.length && parseInt(count[0].length/4);
+              if(count) {
+                for(var i = 0; i < count; i++) {
+                  state = state.withIncreasedIndent();
+                }
+              }
+            }
+
+            var blockquotes,
+                blockquoteSelector = ' > blockquote'; 
+
+            try {
+              // :scope selector is only supported by Chrome at the moment
+              // See. http://updates.html5rocks.com/2013/03/What-s-the-CSS-scope-pseudo-class-for
+              blockquotes = node.querySelectorAll(':scope' + blockquoteSelector);
+            }
+            catch(err) {
+              if(!node.id) {
+                var uniqueId = 'id-'+Date.now();
+                node.id = uniqueId;
+              }
+              else {
+                var originalId = node.id;
+              }
+
+              blockquotes = node.querySelectorAll('#' + node.id + blockquoteSelector);
+
+              if(typeof originalId !== "undefined") {
+                node.id = originalId;
+              }
+            }
+
+            if(blockquotes && blockquotes.length) {
+              var blockquotesCount = blockquotes.length;
+              for(iBlockquote in blockquotes) {
+                var blockquote = blockquotes[iBlockquote],
+                    blockquotesChildrenCount = blockquote.querySelectorAll && blockquote.querySelectorAll('blockquote').length;
+                    
+                if(blockquotesChildrenCount) {
+                  blockquotesCount += blockquotesCount;
+                }
+              }
+              for(var i = 0; i < blockquotesCount; i++) {
+                  state = state.withIncreasedIndent();
+              }
+            }
             output.newlineIfNonEmpty(state);
             parseChildren(node, state, output);
-            output.newlineIfNonEmpty(state);
+            output.output.newlineIfNonEmpty(state);
             break;
           case 'center':
             state = state.withAlign('center');
@@ -4525,6 +4574,7 @@ firepad.ParseHtml = (function () {
         parseNode(node.childNodes[i], state, output);
       }
     }
+    return state;
   }
 
   function parseListItem(node, state, output) {
