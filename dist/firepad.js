@@ -3569,6 +3569,7 @@ firepad.RichTextCodeMirror = (function () {
 
   RichTextCodeMirror.prototype.newline = function() {
     var cm = this.codeMirror;
+    var self = this;
     if (!this.emptySelection_()) {
       cm.replaceSelection('\n', 'end', '+input');
     } else {
@@ -3593,6 +3594,7 @@ firepad.RichTextCodeMirror = (function () {
 
           // Don't mark new todo items as completed.
           if (listType === 'tc') attributes[ATTR.LIST_TYPE] = 't';
+          self.trigger('newLine', {line: cursorLine+1, attr: attributes});
         });
       }
     }
@@ -4761,6 +4763,9 @@ firepad.Firepad = (function(global) {
     this.firebaseAdapter_.on('cursor', function() {
       self.trigger.apply(self, ['cursor'].concat([].slice.call(arguments)));
     });
+    this.richTextCodeMirror_.on('newLine', function() {
+      self.trigger.apply(self, ['newLine'].concat([].slice.call(arguments)));
+    });
     this.firebaseAdapter_.on('ready', function() {
       self.ready_ = true;
       if (this.ace_)
@@ -4913,7 +4918,7 @@ firepad.Firepad = (function(global) {
   Firepad.TODO_STYLE = '<style>ul.firepad-todo { list-style: none; margin-left: 0; padding-left: 0; } ul.firepad-todo > li { padding-left: 1em; text-indent: -1em; } ul.firepad-todo > li:before { content: "\\2610"; padding-right: 5px; } ul.firepad-todo > li.firepad-checked:before { content: "\\2611"; padding-right: 5px; }</style>\n';
   
   Firepad.prototype.getHtml = function() {
-    this.getHtmlFromRange(null, null);
+    return this.getHtmlFromRange(null, null);
   };
 
   Firepad.prototype.getHtmlFromSelection = function() {
@@ -5117,15 +5122,17 @@ firepad.Firepad = (function(global) {
   Firepad.prototype.insertHtml = function (index, html) {
     var lines = firepad.ParseHtml(html, this.entityManager_);
     this.insertText(index, lines);
+    return lines;
   };
 
   Firepad.prototype.insertHtmlAtCursor = function (html) {
-    this.insertHtml(this.codeMirror_.indexFromPos(this.codeMirror_.getCursor()), html);
+    return this.insertHtml(this.codeMirror_.indexFromPos(this.codeMirror_.getCursor()), html);
   };
 
   Firepad.prototype.setHtml = function (html) {
     var lines = firepad.ParseHtml(html, this.entityManager_);
     this.setText(lines);
+    return lines;
   };
 
   Firepad.prototype.isHistoryEmpty = function() {
