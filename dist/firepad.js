@@ -2929,7 +2929,7 @@ firepad.RichTextCodeMirror = (function () {
       this.currentAttributes_ = attrs;
     } else {
       var attributes = this.getCurrentAttributes_();
-      var newValue = (attributes[attribute] !== trueValue) ? trueValue : false;
+      var newValue = (attributes[attribute] !== trueValue) && trueValue;
       this.setAttribute(attribute, newValue);
     }
   };
@@ -3083,6 +3083,7 @@ firepad.RichTextCodeMirror = (function () {
 
   RichTextCodeMirror.prototype.removeText = function(start, end, origin) {
     var cm = this.codeMirror;
+    cm.scrollInfo = cm.getScrollInfo(); // HACK LiveMinutes: client should itself listen for changes
     cm.replaceRange("", cm.posFromIndex(start), cm.posFromIndex(end), origin);
   };
 
@@ -4704,6 +4705,56 @@ firepad.ParseHtml = (function () {
           case 'h2':
           case 'h3':
           case 'p':
+            if(node.childNodes.length && node.childNodes[0].nodeValue) {
+              var value = node.childNodes[0].nodeValue.replace(/&nbsp;/g,' ');
+              var count = value.match(/^(\s| )+/g);
+              count = count && count.length && parseInt(count[0].length/4, 10);
+              if(count) {
+                for(var i = 0; i < count; i++) {
+                  state = state.withIncreasedIndent();
+                }
+              }
+            }
+
+            var blockquotes;
+            var blockquoteSelector = ' > blockquote';
+
+            try {
+              // :scope selector is only supported by Chrome at the moment
+              // See. http://updates.html5rocks.com/2013/03/What-s-the-CSS-scope-pseudo-class-for
+              blockquotes = node.querySelectorAll(':scope' + blockquoteSelector);
+            }
+            catch(err) {
+              var originalId = null;
+              if(!node.id) {
+                var uniqueId = 'id-'+Date.now();
+                node.id = uniqueId;
+              }
+              else {
+                originalId = node.id;
+              }
+
+              blockquotes = node.querySelectorAll('#' + node.id + blockquoteSelector);
+
+              if(originalId !== null) {
+                node.id = originalId;
+              }
+            }
+
+            if(blockquotes && blockquotes.length) {
+              var blockquotesCount = blockquotes.length;
+              for(var iBlockquote in blockquotes) {
+                var blockquote = blockquotes[iBlockquote],
+                    blockquotesChildrenCount = blockquote.querySelectorAll && blockquote.querySelectorAll('blockquote').length;
+
+                if(blockquotesChildrenCount) {
+                  blockquotesCount += blockquotesCount;
+                }
+              }
+              for(var i = 0; i < blockquotesCount; i++) {
+                  state = state.withIncreasedIndent();
+              }
+            }
             output.newlineIfNonEmpty(state);
             parseChildren(node, state, output);
             output.newlineIfNonEmpty(state);
@@ -4773,6 +4824,7 @@ firepad.ParseHtml = (function () {
         parseNode(node.childNodes[i], state, output);
       }
     }
+    return state;
   }
 
   function parseListItem(node, state, output) {
@@ -5076,7 +5128,7 @@ firepad.textPiecesToInserts = function(atNewLine, textPieces) {
     atNewLine = string[string.length-1] === '\n';
   }
 
-  function insertLine(line) {
+  function insertLine(line, noLineAfter) {
     // HACK: We should probably force a newline if there isn't one already.  But due to
     // the way this is used for inserting HTML, we end up inserting a "line" in the middle
     // of text, in which case we don't want to actually insert a newline.
@@ -5088,12 +5140,14 @@ firepad.textPiecesToInserts = function(atNewLine, textPieces) {
       insert(line.textPieces[i]);
     }
 
-    insert('\n');
+    if (!noLineAfter) {
+      insert('\n');
+    }
   }
 
   for(var i = 0; i < textPieces.length; i++) {
     if (textPieces[i] instanceof firepad.Line) {
-      insertLine(textPieces[i]);
+      insertLine(textPieces[i], (i == textPieces.length-1));
     } else {
       insert(textPieces[i]);
     }
@@ -5462,15 +5516,17 @@ firepad.Firepad = (function(global) {
   Firepad.prototype.insertHtml = function (index, html) {
     var lines = firepad.ParseHtml(html, this.entityManager_);
     this.insertText(index, lines);
+    return lines;
   };
 
   Firepad.prototype.insertHtmlAtCursor = function (html) {
-    this.insertHtml(this.codeMirror_.indexFromPos(this.codeMirror_.getCursor()), html);
+    return this.insertHtml(this.codeMirror_.indexFromPos(this.codeMirror_.getCursor()), html);
   };
 
   Firepad.prototype.setHtml = function (html) {
     var lines = firepad.ParseHtml(html, this.entityManager_);
     this.setText(lines);
+    return lines;
   };
 
   Firepad.prototype.isHistoryEmpty = function() {
